@@ -114,6 +114,10 @@ public class GravityHandler {
             return;
         }
         UUID id = player.getUUID();
+        if (player.isInWater() || player.isInLava()) {
+            FALL_DISTANCE.put(id, 0.0D); // 液体里不受坠落伤害
+            return;
+        }
         Vec3 motion = player.getDeltaMovement();
         double along = motion.dot(direction.vector); // 沿重力方向的速度（正数 = 正在"下落"）
         boolean landed;
@@ -141,22 +145,58 @@ public class GravityHandler {
                 && !player.isDeadOrDying()
                 && !player.getAbilities().flying
                 && !player.isFallFlying()
-                && !player.isPassenger()
-                && !player.isInWater()
-                && !player.isInLava();
+                && !player.isPassenger();
+    }
+
+    /** 玩家是否已经在重力方向上「落地」（向上时就是顶到天花板，侧向时是贴住墙）。 */
+    private static boolean isGroundedAlong(Player player, GravityDirection direction) {
+        if (direction.vector.y > 0.0D) {
+            return player.verticalCollision && !player.verticalCollisionBelow;
+        }
+        if (direction.vector.y < 0.0D) {
+            return player.onGround();
+        }
+        return player.horizontalCollision;
     }
 
     private static void applyDirectionalGravity(Player player, GravityDirection direction) {
         Vec3 motion = player.getDeltaMovement();
+
+        if (isGroundedAlong(player, direction)) {
+            // 已经"站在"这个方向的表面上了：把沿重力方向的速度清零，
+            // 绝对不能再补加速度，否则每 tick 都会撞进方块，把水平移动也吃掉。
+            double along = motion.dot(direction.vector);
+            motion = motion.subtract(direction.vector.scale(along));
+            // 近似原版地面摩擦，避免在墙上/天花板上无限滑行。
+            motion = new Vec3(motion.x * 0.6D, motion.y, motion.z * 0.6D);
+            player.setDeltaMovement(motion);
+            return;
+        }
+
+        // 抵消原版这一 tick 已经施加的 -0.08，再按目标方向重新加上。
         if (!player.onGround()) {
-            // 抵消原版这一 tick 已经施加的 -0.08，再由下面按目标方向重新加上。
             motion = motion.add(0.0D, ACCELERATION, 0.0D);
         }
-        // 向上时顶到方块就停住，不再持续加速，避免贴着天花板抖动。
-        if (direction.vector.y > 0.0D && player.verticalCollision && motion.y > 0.0D) {
-            motion = new Vec3(motion.x, 0.0D, motion.z);
-        }
         motion = motion.add(direction.vector.scale(ACCELERATION));
+        player.setDeltaMovement(motion);
+    }
+
+    /**
+     * 原版跳跃永远朝 +Y；重力不是向下时，要把这个冲量换成沿 -重力 方向，
+     * 否则倒立时按跳跃只会往天花板里撞。
+     */
+    @SubscribeEvent
+    public void onLivingJump(net.minecraftforge.event.entity.living.LivingEvent.LivingJumpEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        GravityDirection direction = PlayerGravity.get(player);
+        if (direction == GravityDirection.DOWN) {
+            return;
+        }
+        Vec3 motion = player.getDeltaMovement();
+        motion = motion.subtract(0.0D, 0.42D, 0.0D);   // 抹掉原版跳跃
+        motion = motion.add(direction.vector.scale(-0.42D)); // 沿反重力方向弹起
         player.setDeltaMovement(motion);
     }
 
