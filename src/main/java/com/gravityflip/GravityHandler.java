@@ -131,6 +131,7 @@ public class GravityHandler {
 
         double distance = FALL_DISTANCE.getOrDefault(id, 0.0D);
         if (landed) {
+            GravityFlipMod.LOGGER.info("[gravityflip] landed dir={} fallDistance={}", direction.label, distance);
             if (distance > 3.0D) {
                 player.hurt(player.damageSources().fall(), (float) (distance - 3.0D));
             }
@@ -163,10 +164,12 @@ public class GravityHandler {
         Vec3 motion = player.getDeltaMovement();
 
         if (isGroundedAlong(player, direction)) {
-            // 已经"站在"这个方向的表面上了：把沿重力方向的速度清零，
-            // 绝对不能再补加速度，否则每 tick 都会撞进方块，把水平移动也吃掉。
+            // 只抹掉「正往表面里钻」的速度分量；朝反方向的速度（比如跳跃）必须保留，
+            // 否则跳起来会被这一行立刻按住。
             double along = motion.dot(direction.vector);
-            motion = motion.subtract(direction.vector.scale(along));
+            if (along > 0.0D) {
+                motion = motion.subtract(direction.vector.scale(along));
+            }
             // 近似原版地面摩擦，避免在墙上/天花板上无限滑行。
             motion = new Vec3(motion.x * 0.6D, motion.y, motion.z * 0.6D);
             player.setDeltaMovement(motion);
@@ -195,9 +198,11 @@ public class GravityHandler {
             return;
         }
         Vec3 motion = player.getDeltaMovement();
+        GravityFlipMod.LOGGER.info("[gravityflip] jump dir={} before={}", direction.label, motion);
         motion = motion.subtract(0.0D, 0.42D, 0.0D);   // 抹掉原版跳跃
         motion = motion.add(direction.vector.scale(-0.42D)); // 沿反重力方向弹起
         player.setDeltaMovement(motion);
+        GravityFlipMod.LOGGER.info("[gravityflip] jump after={}", motion);
     }
 
     // ---------------------------------------------------------------- 同步与清理
