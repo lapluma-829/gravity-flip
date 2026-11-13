@@ -8,6 +8,8 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
@@ -33,6 +35,9 @@ public class GravityFlipMod {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(this::commonSetup);
         MinecraftForge.EVENT_BUS.register(new GravityHandler());
+        // 客户端渲染/相机钩子只在物理客户端注册（用 DistExecutor 避免服务端加载客户端类）。
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                () -> () -> com.gravityflip.client.GravityRenderEvents.register());
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
