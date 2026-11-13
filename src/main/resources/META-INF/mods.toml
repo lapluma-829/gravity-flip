@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="gravityflip"
+version="1.0.0"
+displayName="Gravity Flip 重力翻转"
+authors="gravityflip"
+description='''受到伤害后，重力会随机翻转到 上/下/前/后/左/右 六个方向之一，并一直保持。'''
+
+[[dependencies.gravityflip]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.gravityflip]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
