@@ -29,6 +29,8 @@ public class GravityHandler {
     private static final double WORLD_CEILING = 318.0D;
 
     private static final Map<UUID, Long> LAST_FLIP = new ConcurrentHashMap<>();
+    /** 沿重力方向累计的「坠落」距离，用于自定义坠落伤害。 */
+    private static final Map<UUID, Double> FALL_DISTANCE = new ConcurrentHashMap<>();
 
     // ---------------------------------------------------------------- 受伤翻转
 
@@ -100,6 +102,38 @@ public class GravityHandler {
         }
 
         applyDirectionalGravity(player, direction);
+        applyFallDamage(player, direction);
+    }
+
+    /**
+     * 原版坠落伤害只统计向下的位移，重力不是「下」时就不会触发。
+     * 这里沿重力方向自行累计距离，撞到方块时按原版公式（超过 3 格后每格 1 点）扣血。
+     */
+    private static void applyFallDamage(Player player, GravityDirection direction) {
+        if (player.level().isClientSide) {
+            return;
+        }
+        UUID id = player.getUUID();
+        Vec3 motion = player.getDeltaMovement();
+        double along = motion.dot(direction.vector); // 沿重力方向的速度（正数 = 正在"下落"）
+        boolean landed;
+        if (direction.vector.y > 0.0D) {
+            landed = player.verticalCollision;
+        } else if (direction.vector.y < 0.0D) {
+            landed = player.onGround();
+        } else {
+            landed = player.horizontalCollision;
+        }
+
+        double distance = FALL_DISTANCE.getOrDefault(id, 0.0D);
+        if (landed) {
+            if (distance > 3.0D) {
+                player.hurt(player.damageSources().fall(), (float) (distance - 3.0D));
+            }
+            FALL_DISTANCE.put(id, 0.0D);
+        } else if (along > 0.0D) {
+            FALL_DISTANCE.put(id, distance + along);
+        }
     }
 
     private static boolean canBeAffected(Player player) {
@@ -163,6 +197,7 @@ public class GravityHandler {
     public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID id = event.getEntity().getUUID();
         LAST_FLIP.remove(id);
+        FALL_DISTANCE.remove(id);
         PlayerGravity.forget(id);
     }
 }
